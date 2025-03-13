@@ -297,6 +297,30 @@ void
 exit(void)
 {
   struct proc *curproc = myproc();
+    struct proc *prev = 0;
+    struct proc *curr = ptable.head;
+
+    acquire(&ptable.lock);
+
+    // Remove process from queue
+    while (curr) {
+        if (curr == myproc()) {
+            if (prev) {
+                prev->next = curr->next;
+            } else {
+                ptable.head = curr->next;
+            }
+            if (curr == ptable.tail) {
+                ptable.tail = prev;
+            }
+            break;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+
+    release(&ptable.lock);
+  
   struct proc *p;
   int fd;
 
@@ -492,6 +516,49 @@ void scheduler(void)
         c->proc = 0;
         release(&ptable.lock);
     }
+#elif defined(SCHEDULER_FIFO)
+  struct proc *p;
+  struct cpu *c = mycpu();
+  c->proc = 0;
+
+  for (;;) {
+      sti();
+      acquire(&ptable.lock);
+      //cprintf("incremented1\n");
+      // Get the first process in the queue
+      p = ptable.head;
+      //cprintf("incremented2\n");
+      if (p && p->state == RUNNABLE) {
+          // Dequeue the process
+          //ptable.head = p->next;
+          if (!ptable.head) ptable.tail = 0;  // If queue is empty, reset tail
+
+          c->proc = p;
+          switchuvm(p);
+          p->state = RUNNING;
+
+
+          //cprintf("FIFO: Running process %d (Arrival Time: %d)\n", p->pid, p->arrival_time);
+          
+          swtch(&(c->scheduler), p->context);  // Switch to process
+          switchkvm();
+          //cprintf("FIFO: Also Running process %d (Arrival Time: %d)\n", p->pid, p->arrival_time);
+          c->proc = 0;
+
+
+            if (p->state == ZOMBIE) {
+                cprintf("FIFO: Process %d exited, moving to next process.\n", p->pid);
+            }
+      }else if(p&&p->next&&p->next->state==RUNNABLE){
+              ptable.head = p->next;
+      }
+    release(&ptable.lock);
+    if (!ptable.head) {
+            cprintf("All processes finished. Restarting shell...\n");
+            userinit();  
+            cprintf("Shell restarted!\n");
+  }
+}
 #else
     struct proc *p;
     struct cpu *c = mycpu();
