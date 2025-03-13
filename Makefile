@@ -13,6 +13,9 @@ endif
 
 ifeq ($(SCHEDULER),STCF)
 CFLAGS += -DSCHEDULER_STCF
+
+ifeq ($(SCHEDULER),FIFO)
+CFLAGS += -DSCHEDULER_FIFO
 endif
 
 
